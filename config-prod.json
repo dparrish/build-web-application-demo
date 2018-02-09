@@ -1,0 +1,25 @@
+{
+	"project": "[PROJECT]",
+	"auth0": {
+		"domain": "web-application-demo.auth0.com",
+		"audience": ["http://web-application-demo.dparrish.com/"],
+		"client_id": "9pCzl0POsoRl7JWcBJ9013OBGw3aNUIL",
+		"client_secret": "TvD5zgTir9bkcNpLmbqt0wgaqgytcSsWuh0i5Z5U83wtTTytks0RWP7axxKHZbHL"
+	},
+	"spanner": {
+		"instance": "instance-1",
+		"database": "prod"
+	},
+	"storage": {
+		"bucket": "[PROJECT]-prod"
+	},
+	"encryption": {
+		"location": "us-central1",
+		"keyring": "keyring-prod",
+		"key": "api-kek"
+	},
+	"bigquery": {
+		"dataset": "data_prod",
+		"log_table": "access_log"
+	}
+}

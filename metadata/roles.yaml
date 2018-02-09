@@ -1,0 +1,8 @@
+title: "Database Writer"
+description: "Database Writer"
+stage: "ALPHA"
+includedPermissions:
+- spanner.databases.beginOrRollbackReadWriteTransaction
+- spanner.databases.write
+- spanner.sessions.create
+- spanner.sessions.delete

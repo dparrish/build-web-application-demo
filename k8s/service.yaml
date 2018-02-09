@@ -1,0 +1,111 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  # Keep a history of 10 updates
+  revisionHistoryLimit: 10
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      serviceAccountName: frontend
+      containers:
+        - name: esp
+          image: gcr.io/endpoints-release/endpoints-runtime:1
+          args: [
+            "--http_port", "8080",
+            "--ssl_port", "443",
+            "--backend", "127.0.0.1:80",
+            "--service", "frontend.endpoints.[PROJECT].cloud.goog",
+            "--version", "2018-02-13r8",
+            "--service_account_key", "/etc/nginx/creds/esp-key.json",
+          ]
+          ports:
+            - containerPort: 443
+            - containerPort: 8080
+          volumeMounts:
+            - mountPath: /etc/nginx/creds
+              name: esp-key
+              readOnly: true
+            - mountPath: /etc/nginx/ssl
+              name: ssl-certs
+              readOnly: true
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "0.25"
+        - name: frontend
+          image: gcr.io/[PROJECT]/frontend:v2
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+          args: ["/frontend", "--config=/etc/was/config.json"]
+          env:
+            - name: PORT
+              value: "80"
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: "/etc/service-key/key.json"
+          livenessProbe:
+            httpGet:
+              path: /debug/health
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 3
+          readinessProbe:
+            httpGet:
+              path: /debug/health
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 3
+          volumeMounts:
+            - name: service-key
+              mountPath: "/etc/service-key"
+              readOnly: true
+            - name: config
+              mountPath: "/etc/was"
+              readOnly: true
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "0.25"
+      volumes:
+        - name: service-key
+          secret:
+            secretName: frontend-key
+        - name: config
+          secret:
+            secretName: config
+        - name: esp-key
+          secret:
+            secretName: esp-key
+        - name: ssl-certs
+          secret:
+            secretName: nginx-ssl
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: frontend
+  name: frontend
+spec:
+  ports:
+    - port: 80
+      protocol: TCP
+      targetPort: 8080
+      name: http
+    - port: 443
+      protocol: TCP
+      targetPort: 443
+      name: https
+  selector:
+    app: frontend
+  type: LoadBalancer
