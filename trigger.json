@@ -1,0 +1,7 @@
+{ 
+  "filename": "cloudbuild.yaml",
+  "trigger_template": { 
+    "branchName": "master",
+    "repoName": "[PROJECT]"
+  }
+}
