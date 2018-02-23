@@ -1,0 +1,170 @@
+# vim:sw=2 expandtab
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend-canary
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  # Keep a history of 10 updates
+  revisionHistoryLimit: 10
+  template:
+    metadata:
+      labels:
+        app: frontend
+        track: canary
+    spec:
+      serviceAccountName: frontend
+      containers:
+        - name: frontend
+          image: gcr.io/web-application-service-demo/frontend:v6
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+          args: ["--config", "/etc/was/config.json"]
+          env:
+            - name: PORT
+              value: "80"
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: "/etc/service-key/key.json"
+          livenessProbe:
+            httpGet:
+              path: /debug/health
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 3
+          readinessProbe:
+            httpGet:
+              path: /debug/health
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 3
+          volumeMounts:
+            - name: service-key
+              mountPath: "/etc/service-key"
+              readOnly: true
+            - name: config
+              mountPath: "/etc/was"
+              readOnly: true
+        - name: esp
+          image: gcr.io/endpoints-release/endpoints-runtime:1
+          args: [
+            "--http_port", "8080",
+            "--ssl_port", "443",
+            "--backend", "127.0.0.1:80",
+            "--service", "frontend.endpoints.web-application-service-demo.cloud.goog",
+            "--version", "2018-02-13r10",
+            "--service_account_key", "/etc/nginx/creds/esp-key.json",
+          ]
+          ports:
+            - containerPort: 443
+            - containerPort: 8080
+          volumeMounts:
+            - mountPath: /etc/nginx/creds
+              name: esp-key
+              readOnly: true
+            - mountPath: /etc/nginx/ssl
+              name: ssl-certs
+              readOnly: true
+      volumes:
+        - name: service-key
+          secret:
+            secretName: frontend-key
+        - name: config
+          configMap:
+            name: config
+        - name: esp-key
+          secret:
+            secretName: esp-key
+        - name: ssl-certs
+          secret:
+            secretName: nginx-ssl
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend-stable
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: frontend
+  # Keep a history of 10 updates
+  revisionHistoryLimit: 10
+  template:
+    metadata:
+      labels:
+        app: frontend
+        track: stable
+    spec:
+      serviceAccountName: frontend
+      containers:
+        - name: frontend
+          image: gcr.io/web-application-service-demo/frontend:v6
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+          args: ["--config", "/etc/was/config.json"]
+          env:
+            - name: PORT
+              value: "80"
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: "/etc/service-key/key.json"
+          livenessProbe:
+            httpGet:
+              path: /debug/health
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 3
+          readinessProbe:
+            httpGet:
+              path: /debug/health
+              port: 80
+            initialDelaySeconds: 3
+            periodSeconds: 3
+          volumeMounts:
+            - name: service-key
+              mountPath: "/etc/service-key"
+              readOnly: true
+            - name: config
+              mountPath: "/etc/was"
+              readOnly: true
+        - name: esp
+          image: gcr.io/endpoints-release/endpoints-runtime:1
+          args: [
+            "--http_port", "8080",
+            "--ssl_port", "443",
+            "--backend", "127.0.0.1:80",
+            "--service", "frontend.endpoints.web-application-service-demo.cloud.goog",
+            "--version", "2018-02-13r10",
+            "--service_account_key", "/etc/nginx/creds/esp-key.json",
+          ]
+          ports:
+            - containerPort: 443
+            - containerPort: 8080
+          volumeMounts:
+            - mountPath: /etc/nginx/creds
+              name: esp-key
+              readOnly: true
+            - mountPath: /etc/nginx/ssl
+              name: ssl-certs
+              readOnly: true
+      volumes:
+        - name: service-key
+          secret:
+            secretName: frontend-key
+        - name: config
+          configMap:
+            name: config
+        - name: esp-key
+          secret:
+            secretName: esp-key
+        - name: ssl-certs
+          secret:
+            secretName: nginx-ssl
+
