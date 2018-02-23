@@ -132,9 +132,11 @@ func (s *DocumentService) GetDocument(w http.ResponseWriter, r *http.Request) {
 	defer reader.Close()
 
 	// Decrypt the Data Encryption Key using the Key Encryption Key (KMS).
-	ek, err := s.encryption.DecryptKey(ctx, mr.EncryptionKey)
+	ctx, cancel = context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	ek, err := metadata.GetEncryptionKey(ctx, s.spanner, s.encryption, userid)
 	if err != nil {
-		log.Printf("Error decrypting key: %v", err)
+		log.Print(err)
 		swagger.Errorf(w, http.StatusInternalServerError, "Error getting encryption key")
 		return
 	}
@@ -189,17 +191,16 @@ func (s *DocumentService) UploadDocument(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// The following operations are all streaming so that each step doesn't have to take up RAM proportional to the size
-	// of the body.
-
-	// Create a new Data Encryption Key for this blob. Encrypt the Data Encryption Key using the Key Encryption Key (KMS).
-	ek := s.encryption.NewKey()
-	encodedKey, err := s.encryption.EncryptKey(ctx, ek)
+	// Get the data encryption key for the user. One will be created if none exist.
+	ek, err := metadata.GetEncryptionKey(ctx, s.spanner, s.encryption, userid)
 	if err != nil {
-		log.Printf("Error creating encryption key: %v", err)
-		swagger.Errorf(w, http.StatusInternalServerError, "Error creating encryption key")
+		log.Print(err)
+		swagger.Errorf(w, http.StatusInternalServerError, "Error getting encryption key")
 		return
 	}
+
+	// The following operations are all streaming so that each step doesn't have to take up RAM proportional to the size
+	// of the body.
 
 	// Create a blob writer.
 	blobWriter := obj.NewWriter(r.Context())
@@ -248,8 +249,6 @@ func (s *DocumentService) UploadDocument(w http.ResponseWriter, r *http.Request)
 		MimeType: req["mime_type"],
 		Uploaded: time.Now(),
 		Size:     size,
-		// Store the encrypted Data Encryption Key.
-		EncryptionKey: encodedKey,
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)

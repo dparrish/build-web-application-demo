@@ -22,6 +22,8 @@ import (
 	"github.com/gtank/cryptopasta"
 )
 
+type Key *[32]byte
+
 type Envelope struct {
 	config *autoconfig.Config
 	svc    *cloudkms.Service // Google KMS Service client.
@@ -45,7 +47,7 @@ func New(ctx context.Context, config *autoconfig.Config) *Envelope {
 }
 
 // Encrypt encrypts data using enveloe encryption.
-func (e *Envelope) Encrypt(key *[32]byte, reader io.Reader, writer io.Writer) error {
+func (e *Envelope) Encrypt(key Key, reader io.Reader, writer io.Writer) error {
 	block, err := aes.NewCipher(key[:])
 	if err != nil {
 		return err
@@ -66,7 +68,7 @@ func (e *Envelope) Encrypt(key *[32]byte, reader io.Reader, writer io.Writer) er
 }
 
 // Decrypt decrypts data using enveloe encryption.
-func (e *Envelope) Decrypt(key *[32]byte, reader io.Reader, writer io.Writer) error {
+func (e *Envelope) Decrypt(key Key, reader io.Reader, writer io.Writer) error {
 	block, err := aes.NewCipher(key[:])
 	if err != nil {
 		return err
@@ -81,7 +83,7 @@ func (e *Envelope) Decrypt(key *[32]byte, reader io.Reader, writer io.Writer) er
 	return nil
 }
 
-func (e *Envelope) NewKey() *[32]byte {
+func (e *Envelope) NewKey() Key {
 	return cryptopasta.NewEncryptionKey()
 }
 
@@ -90,7 +92,7 @@ func (e *Envelope) kmsKey() string {
 		e.config.Get("encryption.keyring"), "cryptoKeys", e.config.Get("encryption.key"))
 }
 
-func (e *Envelope) DecryptKey(ctx context.Context, key string) (*[32]byte, error) {
+func (e *Envelope) DecryptKey(ctx context.Context, key string) (Key, error) {
 	req := &cloudkms.DecryptRequest{Ciphertext: key}
 	resp, err := e.svc.Projects.Locations.KeyRings.CryptoKeys.Decrypt(e.kmsKey(), req).Do()
 	if err != nil {
@@ -102,7 +104,7 @@ func (e *Envelope) DecryptKey(ctx context.Context, key string) (*[32]byte, error
 	return &ek, nil
 }
 
-func (e *Envelope) EncryptKey(ctx context.Context, key *[32]byte) (string, error) {
+func (e *Envelope) EncryptKey(ctx context.Context, key Key) (string, error) {
 	req := &cloudkms.EncryptRequest{Plaintext: base64.StdEncoding.EncodeToString(key[:])}
 	resp, err := e.svc.Projects.Locations.KeyRings.CryptoKeys.Encrypt(e.kmsKey(), req).Do()
 	if err != nil {
