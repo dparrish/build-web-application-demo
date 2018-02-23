@@ -2,7 +2,7 @@
 
 steps:
   - name: 'golang:1.9'
-    args: ['bash', './cloudbuild.sh']
+    args: ['bash', '-e', './cloudbuild.sh']
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'gcr.io/$PROJECT_ID/frontend', '.']
-images: ['gcr.io/$PROJECT_ID/frontend']
+    args: ['build', '-t', 'gcr.io/$PROJECT_ID/frontend:$SHORT_SHA', '/workspace/build/']
+images: ['gcr.io/$PROJECT_ID/frontend:$SHORT_SHA']

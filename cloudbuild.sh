@@ -1,30 +1,17 @@
-#!/bin/bash -ex
+#!/bin/bash -e
 
+echo "Fetching Go dependencies"
+go get ./... || true
+
+echo "Copying code to the go source root"
 PKG=github.com/dparrish/build-web-application-demo
-
-BUILD=/workspace/image
-mkdir -p ${BUILD}
-
-cp Dockerfile /etc/ssl/certs/ca-certificates.crt ${BUILD}/
-
-export GOPATH=/workspace
 mkdir -p ${GOPATH}/src/${PKG}
-mv * ${GOPATH}/src/${PKG}/
-go get -u ${GOPATH}/src/${PKG}/...
+tar cf - * | (cd ${GOPATH}/src/${PKG} && tar xf -)
 
-CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o ${BUILD}/frontend ${PKG}/frontend
-strip ${BUILD}/frontend
+echo "Building the frontend binary"
+CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o frontend-bin ${PKG}/frontend
+strip frontend-bin
 
-if [ "$PROJECT" == "" ]; then
-	echo "The PROJECT environment variable must be set" >&2
-	exit 0
-fi
+echo "Copying files to the docker build root"
+cp /etc/ssl/certs/ca-certificates.crt .
 
-TAG=$1
-if [ "$TAG" == "" ]; then
-	echo "Specify a tag" >&2
-	exit 0
-fi
-
-#docker build -t gcr.io/${PROJECT}/frontend:${TAG} -f ${BUILD}/Dockerfile ${BUILD}
-#gcloud docker -- push gcr.io/${PROJECT}/frontend:${TAG}

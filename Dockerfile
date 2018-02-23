@@ -1,4 +1,4 @@
 FROM scratch
-ENTRYPOINT ["/frontend"]
+ENTRYPOINT ["/frontend-bin"]
 ADD ca-certificates.crt /etc/ssl/certs/
-ADD frontend /
+ADD frontend-bin /
