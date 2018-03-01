@@ -1,0 +1,34 @@
+# vim: ft=yaml sw=2 expandtab
+
+resources:
+- name: {{ env["name"] }}
+  type: storage.v1.bucket
+  properties:
+    storageClass: REGIONAL
+    location: us-central1
+    lifecycle:
+      rule: 
+        - action:
+            type: SetStorageClass
+            storageClass: NEARLINE
+          condition:
+            age: 30
+            matchesStorageClass:
+              - MULTI_REGIONAL
+              - STANDARD
+              - DURABLE_REDUCED_AVAILABILITY
+        - action:
+            type: SetStorageClass
+            storageClass: COLDLINE
+          condition:
+            age: 180
+            matchesStorageClass:
+              - NEARLINE
+
+  accessControl:
+    gcpIamPolicy:
+      bindings:
+      - role: objectAdmin
+        members:
+          - {{ SERVICEACCOUNT }}
+

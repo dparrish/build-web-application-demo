@@ -1,0 +1,24 @@
+# vim: ft=yaml sw=2 expandtab
+
+resources:
+- name: {{ env["name"] }}
+  type: container.v1.cluster
+  properties:
+    zone: {{ properties["zone"] }}
+    cluster:
+      name: {{ env["name"] }}
+      description: "{{ properties['description'] }}"
+      initialNodeCount: 3
+      nodeConfig:
+        machineType: {{ properties["machineType"] }}
+        preemptible: true
+      addonsConfig:
+        kubernetesDashboard:
+          disabled: true
+      legacyAbac: 
+        enabled: false
+
+
+outputs:
+  - name: clusterEndpoint
+    value: $(ref.{{ env["name"] }}.endpoint)

@@ -1,0 +1,68 @@
+# vim: ft=yaml sw=2 expandtab
+
+{% set SERVICEACCOUNT = "serviceAccount:api-server-{{ properties['env'] }}@{{ env['project'] }}.iam.gserviceaccount.com" %}
+
+resources:
+- name: {{ env['name'] }}-serviceaccount
+  type: serviceaccount.jinja
+  properties:
+    displayName: "API Server ({{ properties['env'] }})"
+
+- name: {{ env['name'] }}-bucket
+  type: storage.v1.bucket
+  properties:
+    storageClass: REGIONAL
+    location: us-central1
+    lifecycle:
+      rule: 
+        - action:
+            type: SetStorageClass
+            storageClass: NEARLINE
+          condition:
+            age: 30
+            matchesStorageClass:
+              - MULTI_REGIONAL
+              - STANDARD
+              - DURABLE_REDUCED_AVAILABILITY
+        - action:
+            type: SetStorageClass
+            storageClass: COLDLINE
+          condition:
+            age: 180
+            matchesStorageClass:
+              - NEARLINE
+
+  accessControl:
+    gcpIamPolicy:
+      bindings:
+      - role: objectAdmin
+        members:
+          - $(ref.{{ env['name'] }}-serviceaccount.link)
+
+- name: {{ env['name'] }}-bq-dataset
+  type: bigquery.v2.dataset
+  properties:
+    location: US
+    access:
+      - role: READER
+        specialGroup: projectReaders
+      - role: WRITER
+        specialGroup: projectWriters
+        userByEmail: {{ SERVICEACCOUNT }}
+      - role: OWNER
+        specialGroup: projectOwners
+
+- name: {{ env['name'] }}-bq-access_log
+  type: bigquery.v2.table
+  properties:
+    datasetId: $(ref.{{ env['name'] }}-bq-dataset)
+    tableReference:
+      datasetId: $(ref.{{ env['name'] }}-bq-dataset)
+      projectId: {{ env['project'] }}
+      tableId: access_log
+    schema:
+      fields:
+        - name: foobar
+          description: foobar
+          mode: NULLABLE
+          type: STRING

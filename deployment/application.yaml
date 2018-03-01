@@ -1,0 +1,15 @@
+# vim: ft=yaml sw=2 expandtab
+
+imports:
+- path: application.jinja
+- path: bucket.jinja
+- path: cluster.jinja
+- path: environment.jinja
+- path: serviceaccount.jinja
+- path: custom-role.jinja
+
+resources:
+- name: was
+  type: application.jinja
+  properties:
+    zone: "us-central1-f"

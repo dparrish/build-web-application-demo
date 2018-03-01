@@ -1,0 +1,69 @@
+# vim: ft=yaml sw=2 expandtab
+
+resources:
+- name: {{ env['name'] }}-dev
+  type: environment.jinja
+  properties:
+    env: "dev"
+    zone: {{ properties['zone'] }}
+- name: {{ env['name'] }}-test
+  type: environment.jinja
+  properties:
+    env: "test"
+    zone: {{ properties['zone'] }}
+- name: {{ env['name'] }}-prod
+  type: environment.jinja
+  properties:
+    env: "prod"
+    zone: {{ properties['zone'] }}
+
+- name: {{ env['name'] }}-monitoring-agent-role
+  type: custom-role.jinja
+  properties:
+    roleId: monitorable
+    title: Monitoring Agent
+    description: Write to monitoring and logging
+    stage: GA
+    includedPermissions:
+      - logging.logEntries.create
+      - monitoring.metricDescriptors.create
+      - monitoring.metricDescriptors.get
+      - monitoring.metricDescriptors.list
+      - monitoring.monitoredResourceDescriptors.get
+      - monitoring.monitoredResourceDescriptors.list
+      - monitoring.timeSeries.create
+
+- name: {{ env['name'] }}-database-writer-role
+  type: custom-role.jinja
+  properties:
+    roleId: databaseWriter
+    title: Database Writer
+    description: Database Writer
+    stage: GA
+    includedPermissions:
+      - spanner.databases.beginOrRollbackReadWriteTransaction
+      - spanner.databases.write
+      - spanner.sessions.create
+      - spanner.sessions.delete
+
+- name: {{ env['name'] }}-cluster
+  type: cluster.jinja
+  properties:
+    description: "Test cluster"
+    zone: {{ properties['zone'] }}
+    machineType: f1-micro
+
+- name: {{ env['name'] }}-spanner-instance-1
+  type: spanner.v1.instances
+  properties:
+    instance:
+      name: instance-1
+      displayName: instance-1
+      nodeCount: 1
+  accessControl:
+    gcpIamPolicy:
+      bindings:
+      - role: $(ref.{{ env['name'] }}-database-writer-role.selfLink)
+        members:
+          - {{ SERVICEACCOUNT }}
+
