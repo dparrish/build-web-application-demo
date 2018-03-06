@@ -302,7 +302,7 @@ func main() {
 	flag.Parse()
 	ctx := context.Background()
 
-	log.Printf("Starting Document Storage API service")
+	log.Printf("Starting Document Storage API service v1.0.0")
 
 	config, err := autoconfig.Load(ctx, *configFile)
 	if err != nil {
