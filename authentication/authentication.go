@@ -69,8 +69,8 @@ func Middleware(config *autoconfig.Config, next http.HandlerFunc) http.HandlerFu
 	uri := fmt.Sprintf("https://%s/.well-known/jwks.json", config.Get("auth0.domain"))
 	audience := []string{config.Get("auth0.client_id")}
 	issuer := fmt.Sprintf("https://%s/", config.Get("auth0.domain"))
-	client := auth0.NewJWKClient(auth0.JWKClientOptions{URI: uri})
-	validator := auth0.NewValidator(auth0.NewConfiguration(client, audience, issuer, jose.RS256))
+	client := auth0.NewJWKClient(auth0.JWKClientOptions{URI: uri}, nil)
+	validator := auth0.NewValidator(auth0.NewConfiguration(client, audience, issuer, jose.RS256), nil)
 
 	return func(w http.ResponseWriter, r *http.Request) {
 		token, err := validator.ValidateRequest(r)
