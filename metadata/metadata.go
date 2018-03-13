@@ -29,15 +29,7 @@ type User struct {
 }
 
 // keyCache contains an in-memory cache of userid -> encryption key.
-var keyCache *lru.Cache
-
-func init() {
-	var err error
-	keyCache, err = lru.New(128)
-	if err != nil {
-		log.Fatal(err)
-	}
-}
+var keyCache, _ = lru.New(512)
 
 func GetEncryptionKey(ctx context.Context, client *spanner.Client, envelope *encryption.Envelope, userid string) (encryption.Key, error) {
 	// Check the cache first.

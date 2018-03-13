@@ -7,14 +7,16 @@ package autoconfig
 import (
 	"context"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"sync"
 	"time"
 
 	"github.com/clbanning/mxj"
 	"github.com/go-fsnotify/fsnotify"
+	"github.com/spf13/afero"
 )
+
+var Fs = afero.NewOsFs()
 
 // Config wraps a JSON configuration stored on disk and provides functions to query it.
 type Config struct {
@@ -29,15 +31,19 @@ func Load(ctx context.Context, filename string) (*Config, error) {
 	if err := c.read(); err != nil {
 		return nil, fmt.Errorf("unable to read initial config: %v", err)
 	}
+	return c, nil
+}
+
+func (c *Config) Watch(ctx context.Context) error {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		return nil, fmt.Errorf("couldn't create config watcher: %v", err)
+		return fmt.Errorf("couldn't create config watcher: %v", err)
 	}
 	if err := watcher.Add(c.filename); err != nil {
-		return nil, fmt.Errorf("couldn't create config watcher: %v", err)
+		return fmt.Errorf("couldn't create config watcher: %v", err)
 	}
 	go c.background(ctx, watcher)
-	return c, nil
+	return nil
 }
 
 // AddValidator adds a function that will be called whenever the config file changes.
@@ -57,7 +63,7 @@ func (c *Config) Get(path string) string {
 	defer c.RUnlock()
 	values, err := c.mv.ValuesForPath(path)
 	if err != nil {
-		log.Printf("Error in ValuesForPath(%q): %v", err)
+		log.Printf("Error in ValuesForPath(%q): %v", path, err)
 	}
 	if len(values) == 0 {
 		return ""
@@ -71,7 +77,7 @@ func (c *Config) GetAll(path string) []string {
 	defer c.RUnlock()
 	values, err := c.mv.ValuesForPath(path)
 	if err != nil {
-		log.Printf("Error in ValuesForPath(%q): %v", err)
+		log.Printf("Error in ValuesForPath(%q): %v", path, err)
 	}
 	r := make([]string, 0, len(values))
 	for _, v := range values {
@@ -81,7 +87,7 @@ func (c *Config) GetAll(path string) []string {
 }
 
 func (c *Config) read() error {
-	body, err := ioutil.ReadFile(c.filename)
+	body, err := afero.ReadFile(Fs, c.filename)
 	if err != nil {
 		return fmt.Errorf("couldn't read config file %q: %v", c.filename, err)
 	}

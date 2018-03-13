@@ -308,6 +308,9 @@ func main() {
 	if err != nil {
 		log.Fatalf("Could not load config file %q: %v", *configFile, err)
 	}
+	if err := config.Watch(ctx); err != nil {
+		log.Fatalf("Could not watch config file %q: %v", *configFile, err)
+	}
 	config.AddValidator(func(old, new *autoconfig.Config) error {
 		for _, key := range []string{"project", "spanner.instance", "spanner.database"} {
 			if old.Get(key) != new.Get(key) {

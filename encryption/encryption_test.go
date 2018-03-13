@@ -17,13 +17,13 @@ func TestEncryptAndDecrypt(t *testing.T) {
 	// Encrypt.
 	key := e.NewKey()
 	var ciphertext bytes.Buffer
-	if err := e.EncryptStream(key, strings.NewReader(testPlain), &ciphertext); err != nil {
+	if err := e.Encrypt(key, strings.NewReader(testPlain), &ciphertext); err != nil {
 		t.Error(err)
 	}
 
 	// Decrypt.
 	var plain bytes.Buffer
-	if err := e.DecryptStream(key, &ciphertext, &plain); err != nil {
+	if err := e.Decrypt(key, &ciphertext, &plain); err != nil {
 		t.Error(err)
 	}
 	if plain.String() != testPlain {
