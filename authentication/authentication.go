@@ -10,6 +10,7 @@ import (
 
 	"github.com/dparrish/build-web-application-demo/autoconfig"
 	"github.com/dparrish/build-web-application-demo/swagger"
+	"go.opencensus.io/trace"
 
 	auth0 "github.com/auth0-community/go-auth0"
 	gctx "github.com/gorilla/context"
@@ -73,9 +74,12 @@ func Middleware(config *autoconfig.Config, next http.HandlerFunc) http.HandlerFu
 	validator := auth0.NewValidator(auth0.NewConfiguration(client, audience, issuer, jose.RS256), nil)
 
 	return func(w http.ResponseWriter, r *http.Request) {
+		_, span := trace.StartSpan(r.Context(), "github.com/dparrish/build-web-application-demo/authentication.Middleware")
+
 		token, err := validator.ValidateRequest(r)
 		if err != nil {
 			swagger.Errorf(w, http.StatusUnauthorized, "Missing or invalid token")
+			span.End()
 			return
 		}
 
@@ -84,12 +88,15 @@ func Middleware(config *autoconfig.Config, next http.HandlerFunc) http.HandlerFu
 
 		// Check the expiry time on the JWT claim.
 		if time.Now().After(claims.Expiry.Time()) {
-			swagger.Errorf(w, http.StatusUnauthorized, "Missing or invalid token")
+			swagger.Errorf(w, http.StatusUnauthorized, "Expired token")
+			span.End()
 			return
 		}
 
 		// Save the logged-in user ID to the context for the next handler.
 		gctx.Set(r, "userid", claims.Subject)
+
+		span.End()
 		next.ServeHTTP(w, r)
 	}
 }

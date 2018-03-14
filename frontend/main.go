@@ -28,6 +28,7 @@ import (
 	"go.opencensus.io/exporter/stackdriver"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/tag"
+	"go.opencensus.io/trace"
 
 	health "github.com/docker/go-healthcheck"
 	"github.com/google/uuid"
@@ -40,6 +41,8 @@ var (
 	configFile  = flag.String("config", "", "Configuration file location")
 	warmSpanner = flag.Bool("warm_spanner", false, "Send a warming query to spanner on startup")
 )
+
+const packagePath = "github.com/dparrish/build-web-application-demo/frontend"
 
 type DocumentService struct {
 	// Cloud API Clients
@@ -91,29 +94,51 @@ func NewDocumentService(config *autoconfig.Config, ctx context.Context) (*Docume
 }
 
 func (s *DocumentService) ListDocuments(w http.ResponseWriter, r *http.Request) {
-	ctx, _ := tag.New(r.Context(), tag.Insert(methodKey, "list"))
+	// Record trace.
+	reqCtx, reqSpan := trace.StartSpan(r.Context(), fmt.Sprintf("%s.ListDocuments", packagePath))
+	defer reqSpan.End()
+
+	// Record Metrics.
+	ctx, _ := tag.New(reqCtx, tag.Insert(methodKey, "list"))
 	stats.Record(ctx, s.metrics.requests.M(1))
 
+	// Retrieve request details.
 	userid := gcontext.Get(r, "userid").(string)
+	reqSpan.SetAttributes(
+		trace.StringAttribute("userid", userid),
+	)
 
-	rows, err := metadata.ListForUser(r.Context(), s.spanner, userid)
+	rows, err := metadata.ListForUser(ctx, s.spanner, userid)
 	if err != nil {
 		log.Print(err)
 		swagger.Errorf(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	stats.Record(ctx, s.metrics.documentCount.M(int64(len(rows))))
+
+	_, span := trace.StartSpan(reqCtx, "JSON Encode")
 	json.NewEncoder(w).Encode(rows)
+	span.End()
 }
 
 func (s *DocumentService) GetDocument(w http.ResponseWriter, r *http.Request) {
-	ctx, _ := tag.New(r.Context(), tag.Insert(methodKey, "get"))
-	stats.Record(ctx, s.metrics.requests.M(1))
+	// Record trace.
+	reqCtx, reqSpan := trace.StartSpan(r.Context(), fmt.Sprintf("%s.GetDocument", packagePath))
+	defer reqSpan.End()
 
+	// Record Metrics.
+	reqCtx, _ = tag.New(reqCtx, tag.Insert(methodKey, "get"))
+	stats.Record(reqCtx, s.metrics.requests.M(1))
+
+	// Retrieve request details.
 	userid := gcontext.Get(r, "userid").(string)
 	vars := mux.Vars(r)
+	reqSpan.SetAttributes(
+		trace.StringAttribute("userid", userid),
+		trace.StringAttribute("id", vars["id"]),
+	)
 
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(reqCtx, 10*time.Second)
 	defer cancel()
 	mr, err := metadata.Get(ctx, s.spanner, userid, vars["id"])
 	if err != nil {
@@ -123,7 +148,7 @@ func (s *DocumentService) GetDocument(w http.ResponseWriter, r *http.Request) {
 
 	bucket := s.storage.Bucket(s.config.Get("storage.bucket"))
 	obj := bucket.Object(mr.ID)
-	reader, err := obj.NewReader(r.Context())
+	reader, err := obj.NewReader(reqCtx)
 	if err != nil {
 		log.Print(err)
 		swagger.Errorf(w, http.StatusInternalServerError, "Error reading blob")
@@ -132,7 +157,7 @@ func (s *DocumentService) GetDocument(w http.ResponseWriter, r *http.Request) {
 	defer reader.Close()
 
 	// Decrypt the Data Encryption Key using the Key Encryption Key (KMS).
-	ctx, cancel = context.WithTimeout(r.Context(), 10*time.Second)
+	ctx, cancel = context.WithTimeout(reqCtx, 10*time.Second)
 	defer cancel()
 	ek, err := metadata.GetEncryptionKey(ctx, s.spanner, s.encryption, userid)
 	if err != nil {
@@ -156,6 +181,8 @@ func (s *DocumentService) GetDocument(w http.ResponseWriter, r *http.Request) {
 
 	// Decrypt the Data using the Data Encryption Key. This uses streaming decryption so the whole body doesn't have to be
 	// read into RAM first.
+	_, span := trace.StartSpan(reqCtx, "Decrypt Data")
+	defer span.End()
 	if err := s.encryption.Decrypt(ek, reader, mw); err != nil {
 		log.Printf("Error reading body: %v", err)
 		swagger.Errorf(w, http.StatusInternalServerError, "Error reading body")
@@ -164,10 +191,19 @@ func (s *DocumentService) GetDocument(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *DocumentService) UploadDocument(w http.ResponseWriter, r *http.Request) {
-	ctx, _ := tag.New(r.Context(), tag.Insert(methodKey, "upload"))
+	// Record trace.
+	reqCtx, reqSpan := trace.StartSpan(r.Context(), fmt.Sprintf("%s.UploadDocument", packagePath))
+	defer reqSpan.End()
+
+	// Record Metrics.
+	ctx, _ := tag.New(reqCtx, tag.Insert(methodKey, "upload"))
 	stats.Record(ctx, s.metrics.requests.M(1))
 
+	// Retrieve request details.
 	userid := gcontext.Get(r, "userid").(string)
+	reqSpan.SetAttributes(
+		trace.StringAttribute("userid", userid),
+	)
 
 	// Create the bucket handle before parsing the request, just in case it doesn't work.
 	filename, err := uuid.NewRandom()
@@ -203,7 +239,7 @@ func (s *DocumentService) UploadDocument(w http.ResponseWriter, r *http.Request)
 	// of the body.
 
 	// Create a blob writer.
-	blobWriter := obj.NewWriter(r.Context())
+	blobWriter := obj.NewWriter(reqCtx)
 	if req["mime_type"] != "" {
 		// Set the MIME type to whatever the caller specifies, if it's set.
 		blobWriter.ObjectAttrs.ContentType = req["mime_type"]
@@ -230,6 +266,7 @@ func (s *DocumentService) UploadDocument(w http.ResponseWriter, r *http.Request)
 	}()
 
 	// Encrypt the Data using the Data Encryption Key. The data is streamed from the io.Pipe created above.
+	_, span := trace.StartSpan(reqCtx, "Encrypt Data")
 	if err := s.encryption.Encrypt(ek, pr, blobWriter); err != nil {
 		log.Printf("Error encrypting body: %v", err)
 		swagger.Errorf(w, http.StatusInternalServerError, "Error writing to backend storage")
@@ -241,6 +278,7 @@ func (s *DocumentService) UploadDocument(w http.ResponseWriter, r *http.Request)
 		swagger.Errorf(w, http.StatusInternalServerError, "Error writing to backend storage")
 		return
 	}
+	span.End()
 
 	mr := &metadata.Row{
 		ID:       filename.String(),
@@ -250,8 +288,15 @@ func (s *DocumentService) UploadDocument(w http.ResponseWriter, r *http.Request)
 		Uploaded: time.Now(),
 		Size:     size,
 	}
+	a := trace.StringAttribute("filename", "foobar")
+	reqSpan.Annotate([]trace.Attribute{
+		a,
+		trace.StringAttribute("filename", req["name"]),
+		trace.StringAttribute("gcs object id", filename.String()),
+		trace.Int64Attribute("size", size),
+	}, "Metadata row")
 
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(reqCtx, 10*time.Second)
 	defer cancel()
 	if err := metadata.Add(ctx, s.spanner, mr); err != nil {
 		log.Printf("Error writing metadata: %v", err)
@@ -260,17 +305,29 @@ func (s *DocumentService) UploadDocument(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Complete, give the user something to look at.
+	_, span = trace.StartSpan(reqCtx, "JSON Encode")
 	json.NewEncoder(w).Encode(*mr)
+	span.End()
 }
 
 func (s *DocumentService) DeleteDocument(w http.ResponseWriter, r *http.Request) {
-	ctx, _ := tag.New(r.Context(), tag.Insert(methodKey, "delete"))
-	stats.Record(ctx, s.metrics.requests.M(1))
+	// Record trace.
+	reqCtx, reqSpan := trace.StartSpan(r.Context(), fmt.Sprintf("%s.DeleteDocument", packagePath))
+	defer reqSpan.End()
 
+	// Record Metrics.
+	reqCtx, _ = tag.New(reqCtx, tag.Insert(methodKey, "delete"))
+	stats.Record(reqCtx, s.metrics.requests.M(1))
+
+	// Retrieve request details.
 	userid := gcontext.Get(r, "userid").(string)
 	vars := mux.Vars(r)
+	reqSpan.SetAttributes(
+		trace.StringAttribute("userid", userid),
+		trace.StringAttribute("id", vars["id"]),
+	)
 
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(reqCtx, 10*time.Second)
 	defer cancel()
 	mr, err := metadata.Get(ctx, s.spanner, userid, vars["id"])
 	if err != nil {
@@ -287,15 +344,17 @@ func (s *DocumentService) DeleteDocument(w http.ResponseWriter, r *http.Request)
 
 	bucket := s.storage.Bucket(s.config.Get("storage.bucket"))
 	obj := bucket.Object(mr.ID)
-	ctx, cancel = context.WithTimeout(r.Context(), 10*time.Second)
+	ctx, cancel = context.WithTimeout(reqCtx, 10*time.Second)
 	defer cancel()
-	if err := obj.Delete(r.Context()); err != nil {
+	if err := obj.Delete(reqCtx); err != nil {
 		log.Print(err)
 		swagger.Errorf(w, http.StatusNotFound, "Error deleting metadata")
 		return
 	}
 
+	_, span := trace.StartSpan(reqCtx, "JSON Encode")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	span.End()
 }
 
 func main() {

@@ -65,14 +65,12 @@ func Request(method string, path string, request map[string]string) ([]byte, err
 
 func POSTJSON(path string, request map[string]string) (map[string]string, error) {
 	body, err := Request("POST", path, request)
-	if err != nil {
-		return nil, err
-	}
 	var res map[string]string
+	// Assume that the body will be JSON encoded even for an error.
 	if err := json.NewDecoder(bytes.NewReader(body)).Decode(&res); err != nil {
 		return nil, err
 	}
-	return res, nil
+	return res, err
 }
 
 func cmdLogin(c *cli.Context) error {
@@ -86,6 +84,9 @@ func cmdLogin(c *cli.Context) error {
 		"password": c.Args()[1],
 	})
 	if err != nil {
+		if res["error_description"] != "" {
+			log.Fatalf("%v: %v", err, res["error_description"])
+		}
 		log.Fatal(err)
 	}
 	if res["token"] == "" {
@@ -98,6 +99,7 @@ func cmdLogin(c *cli.Context) error {
 func cmdList(c *cli.Context) error {
 	body, err := Request("GET", "/document/", nil)
 	if err != nil {
+		fmt.Printf("%s\n", string(body))
 		return fmt.Errorf("error in list request: %v", err)
 	}
 	var res []struct {

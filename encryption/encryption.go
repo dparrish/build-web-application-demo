@@ -15,6 +15,7 @@ import (
 	"path"
 
 	"github.com/dparrish/build-web-application-demo/autoconfig"
+	"go.opencensus.io/trace"
 
 	"golang.org/x/oauth2/google"
 	cloudkms "google.golang.org/api/cloudkms/v1"
@@ -93,6 +94,8 @@ func (e *Envelope) kmsKey() string {
 }
 
 func (e *Envelope) DecryptKey(ctx context.Context, key string) (Key, error) {
+	ctx, span := trace.StartSpan(ctx, "DecryptKey")
+	defer span.End()
 	req := &cloudkms.DecryptRequest{Ciphertext: key}
 	resp, err := e.svc.Projects.Locations.KeyRings.CryptoKeys.Decrypt(e.kmsKey(), req).Do()
 	if err != nil {
@@ -105,6 +108,8 @@ func (e *Envelope) DecryptKey(ctx context.Context, key string) (Key, error) {
 }
 
 func (e *Envelope) EncryptKey(ctx context.Context, key Key) (string, error) {
+	ctx, span := trace.StartSpan(ctx, "EncryptKey")
+	defer span.End()
 	req := &cloudkms.EncryptRequest{Plaintext: base64.StdEncoding.EncodeToString(key[:])}
 	resp, err := e.svc.Projects.Locations.KeyRings.CryptoKeys.Encrypt(e.kmsKey(), req).Do()
 	if err != nil {

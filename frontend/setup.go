@@ -20,6 +20,8 @@ import (
 	"go.opencensus.io/trace"
 )
 
+var traceClient string
+
 // createClients creates all the required Cloud API clients in parallel to reduce startup time.
 func (s *DocumentService) createClients(ctx context.Context) {
 	var wg sync.WaitGroup
@@ -88,6 +90,7 @@ func (s *DocumentService) createClients(ctx context.Context) {
 
 		// Export to Stackdriver Trace.
 		trace.RegisterExporter(s.exporter)
+		trace.SetDefaultSampler(trace.AlwaysSample())
 
 		// Create exported metrics and views.
 		s.metrics.documentCount, _ = stats.Int64("frontend/measure/document_count", "Number of documents in a list response", "docs")
