@@ -104,7 +104,7 @@ func (s *DocumentService) ListDocuments(w http.ResponseWriter, r *http.Request) 
 
 	// Retrieve request details.
 	userid := gcontext.Get(r, "userid").(string)
-	reqSpan.SetAttributes(
+	reqSpan.AddAttributes(
 		trace.StringAttribute("userid", userid),
 	)
 
@@ -133,7 +133,7 @@ func (s *DocumentService) GetDocument(w http.ResponseWriter, r *http.Request) {
 	// Retrieve request details.
 	userid := gcontext.Get(r, "userid").(string)
 	vars := mux.Vars(r)
-	reqSpan.SetAttributes(
+	reqSpan.AddAttributes(
 		trace.StringAttribute("userid", userid),
 		trace.StringAttribute("id", vars["id"]),
 	)
@@ -201,7 +201,7 @@ func (s *DocumentService) UploadDocument(w http.ResponseWriter, r *http.Request)
 
 	// Retrieve request details.
 	userid := gcontext.Get(r, "userid").(string)
-	reqSpan.SetAttributes(
+	reqSpan.AddAttributes(
 		trace.StringAttribute("userid", userid),
 	)
 
@@ -322,7 +322,7 @@ func (s *DocumentService) DeleteDocument(w http.ResponseWriter, r *http.Request)
 	// Retrieve request details.
 	userid := gcontext.Get(r, "userid").(string)
 	vars := mux.Vars(r)
-	reqSpan.SetAttributes(
+	reqSpan.AddAttributes(
 		trace.StringAttribute("userid", userid),
 		trace.StringAttribute("id", vars["id"]),
 	)

@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/clbanning/mxj"
-	"github.com/go-fsnotify/fsnotify"
+	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/afero"
 )
 

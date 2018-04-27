@@ -90,39 +90,34 @@ func (s *DocumentService) createClients(ctx context.Context) {
 
 		// Export to Stackdriver Trace.
 		trace.RegisterExporter(s.exporter)
-		trace.SetDefaultSampler(trace.AlwaysSample())
+		trace.ApplyConfig(trace.Config{DefaultSampler: trace.AlwaysSample()})
 
 		// Create exported metrics and views.
-		s.metrics.documentCount, _ = stats.Int64("frontend/measure/document_count", "Number of documents in a list response", "docs")
-		v, _ := view.New(
-			"frontend/views/list_document_count",
-			"list document count over time",
-			nil,
-			s.metrics.documentCount,
-			view.DistributionAggregation([]float64{0, 1 << 2, 1 << 3, 1 << 4, 1 << 5, 1 << 6, 1 << 7}),
-		)
-		v.Subscribe()
+		s.metrics.documentCount = stats.Int64("frontend/measure/document_count", "Number of documents in a list response", "docs")
+		view.Register(&view.View{
+			Name:        "frontend/views/list_document_count",
+			Description: "list document count over time",
+			Measure:     s.metrics.documentCount,
+			Aggregation: view.Distribution(0, 1<<2, 1<<3, 1<<4, 1<<5, 1<<6, 1<<7),
+		})
 
-		s.metrics.retrieveAge, _ = stats.Float64("frontend/measure/retrieve_age", "Age of document at retrieval time", "seconds")
-		v, _ = view.New(
-			"frontend/views/retrieve_age",
-			"list document count over time",
-			nil,
-			s.metrics.retrieveAge,
-			view.DistributionAggregation([]float64{0, 1 << 2, 1 << 3, 1 << 4, 1 << 5, 1 << 6, 1 << 7}),
-		)
-		v.Subscribe()
+		s.metrics.retrieveAge = stats.Float64("frontend/measure/retrieve_age", "Age of document at retrieval time", "seconds")
+		view.Register(&view.View{
+			Name:        "frontend/views/retrieve_age",
+			Description: "list document count over time",
+			Measure:     s.metrics.retrieveAge,
+			Aggregation: view.Distribution(0, 1<<2, 1<<3, 1<<4, 1<<5, 1<<6, 1<<7),
+		})
 
-		s.metrics.requests, _ = stats.Int64("frontend/measure/requests", "Number of requests", "requests")
+		s.metrics.requests = stats.Int64("frontend/measure/requests", "Number of requests", "requests")
 		methodKey, _ = tag.NewKey("frontend/keys/method")
-		v, _ = view.New(
-			"frontend/views/requests",
-			"requests over time",
-			[]tag.Key{methodKey},
-			s.metrics.requests,
-			view.CountAggregation{},
-		)
-		v.Subscribe()
+		view.Register(&view.View{
+			Name:        "frontend/views/requests",
+			Description: "requests over time",
+			TagKeys:     []tag.Key{methodKey},
+			Measure:     s.metrics.requests,
+			Aggregation: view.Count(),
+		})
 	}()
 
 	wg.Wait()
